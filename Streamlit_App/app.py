@@ -233,12 +233,41 @@ def render_planner_view():
                     st.markdown(f"📱 [Send via WhatsApp](https://wa.me/?text={wa_encoded})")
                     st.markdown(f"📧 [Send via Email](mailto:?subject={email_encoded_sub}&body={email_encoded_body})")
                     st.caption("This link is entirely secure and hides your budget calculations from the receiver.")
+            
+            # HIDDEN DEV TOOL: Fast view as receiver
+            st.write("")
+            st.write("")
+            with st.expander("🛠️ Dev Tools (Hidden)", expanded=False):
+                st.caption("Testing feature to quickly view the app as the receiver without opening a new tab.")
+                
+                # Fetch recent date plans from db for quick testing
+                import sqlite3
+                conn = sqlite3.connect(db.DB_FILE)
+                c = conn.cursor()
+                c.execute('SELECT token, planner_name FROM date_plans ORDER BY created_at DESC LIMIT 5')
+                recent_plans = c.fetchall()
+                conn.close()
+                
+                if recent_plans:
+                    st.write("Recent tokens:")
+                    for p in recent_plans:
+                        if st.button(f"View Plan: {p[0]} ({p[1]})"):
+                            # Instead of a complex url rewrite, we just jump state
+                            st.query_params.update(invite=p[0])
+                            st.rerun()
+                else:
+                    st.caption("No generated plans to view yet. Generate a link first!")
 
 # --- Main App Routing ---
 query_params = st.query_params
 invite_token = query_params.get("invite")
 
 if invite_token:
+    # Add a "Go Back to Planner" button for the dev tools testing flow
+    if st.sidebar.button("🔙 Developer: End Guest View"):
+        st.query_params.clear()
+        st.rerun()
+        
     render_receiver_view(invite_token)
 else:
     render_planner_view()
