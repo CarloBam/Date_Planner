@@ -47,7 +47,8 @@ def get_recommendations(venues, profile):
         if not profile.get("has_car", True) and v["car_required"]:
             continue
             
-        # Radius logic
+        # Radius and nearby boost logic
+        dist = 0
         if profile.get("start_lat") and profile.get("start_lon"):
             dist = get_distance_km(profile["start_lat"], profile["start_lon"], v["latitude"], v["longitude"])
             if dist > profile.get("max_radius_km", 15):
@@ -62,7 +63,17 @@ def get_recommendations(venues, profile):
         if windy and v["weather_dependency"] == "needs_no_wind":
             continue
             
+        # Seasonal rules for specific venues
+        if v["name"] == "Galileo Open Air Cinema":
+            month = profile.get("planned_date_month", 1)
+            if 5 <= month <= 10:
+                continue # Skip Galileo in winter (May - Oct)
+            
         score = 0
+        
+        # Boost for places physically close (especially to the *last* item added)
+        # Assuming dist is max 15km based on radius check, we can award up to 15 points for being very close
+        score += max(0, int((15 - dist) * 1.5))
         
         # Energy
         energy = profile.get("energy", "Balanced")

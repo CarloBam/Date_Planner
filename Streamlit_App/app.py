@@ -1,5 +1,6 @@
 import streamlit as st
 import urllib.parse
+import datetime
 from engine import extract_tags, get_distance_km, calculate_fuel_and_uber, get_recommendations
 from data import VENUES, AREAS_COORDINATES
 import database as db
@@ -40,6 +41,14 @@ def render_receiver_view(token):
         for i, v in enumerate(plan["itinerary"]):
             st.markdown(f"**Step {i+1}: {v['name']}**")
             st.caption(f"📍 {v['area']}  ⏳ {v['duration_minutes']} mins")
+            
+            if i == 0:
+                maps_url = f"https://www.google.com/maps/dir/?api=1&destination={v['latitude']},{v['longitude']}"
+            else:
+                prev_v = plan["itinerary"][i-1]
+                maps_url = f"https://www.google.com/maps/dir/?api=1&origin={prev_v['latitude']},{prev_v['longitude']}&destination={v['latitude']},{v['longitude']}"
+            
+            st.markdown(f"🗺️ [Directions to here]({maps_url})")
             st.markdown(f"_{v['description']}_")
             tags = " ".join([f"`{t}`" for t in v["psychographic_tags"]])
             st.markdown(tags)
@@ -57,6 +66,15 @@ def render_receiver_view(token):
         st.markdown("### 🕊️ Guardian Mode (Optional)")
         st.caption("You will have the option to privately share real-time location with your trusted contacts during the date.")
         
+        if plan.get("date_stage") == "First Date":
+            st.info("💡 **First Date Safety Tip:** We always recommend sharing your live location with a friend! (Also, it's always smart to carry some pepper spray just to be safe.)")
+            
+            # Reconstruct invite url for whatsapp sharing
+            base_url = "http://localhost:8501"
+            invite_url = f"{base_url}?invite={token}"
+            wa_share = urllib.parse.quote(f"Hey! I'm going on a first date. I'll share my live location soon, but here is my itinerary: {invite_url}")
+            st.markdown(f"📱 [Share Alert to WhatsApp Friend](https://wa.me/?text={wa_share})")
+            
         # Actions for the receiver
         if plan["status"] == "pending":
             st.markdown("### Your Decision")
@@ -99,6 +117,7 @@ def render_planner_view():
 
     st.sidebar.subheader("Logistics & Stage")
     date_stage = st.sidebar.selectbox("Date Stage", ["First Date", "Second Date", "Third Date", "Anniversary", "Birthday Date"])
+    planned_date = st.sidebar.date_input("Planned Date", datetime.date.today())
     energy = st.sidebar.selectbox("Her Energy", ["Introverted", "Extroverted", "Balanced"])
     budget = st.sidebar.number_input("Total Budget (ZAR)", min_value=100, max_value=10000, value=800, step=100)
     st.session_state.budget = budget
@@ -112,13 +131,21 @@ def render_planner_view():
     is_rainy = colA.checkbox("Rainy? 🌧️")
     is_windy = colB.checkbox("Strong Wind? 🌬️")
 
+    start_lat = AREAS_COORDINATES[start_area][0]
+    start_lon = AREAS_COORDINATES[start_area][1]
+    if len(st.session_state.itinerary) > 0:
+        last_item = st.session_state.itinerary[-1]
+        start_lat = last_item["latitude"]
+        start_lon = last_item["longitude"]
+
     profile = {
         "description": description,
         "date_stage": date_stage,
+        "planned_date_month": planned_date.month,
         "energy": energy,
         "has_car": has_car,
-        "start_lat": AREAS_COORDINATES[start_area][0],
-        "start_lon": AREAS_COORDINATES[start_area][1],
+        "start_lat": start_lat,
+        "start_lon": start_lon,
         "max_radius_km": max_radius,
         "rainy": is_rainy,
         "windy": is_windy
@@ -172,13 +199,17 @@ def render_planner_view():
                 
                 if i == 0:
                     dist_str = f"From {start_area}: {dist_start_to_first:.1f} km"
+                    origin_lat, origin_lon = profile["start_lat"], profile["start_lon"]
                 else:
                     prev_v = st.session_state.itinerary[i-1]
                     dist = get_distance_km(prev_v["latitude"], prev_v["longitude"], v["latitude"], v["longitude"])
                     total_distance += dist
                     dist_str = f"From previous stop: {dist:.1f} km"
+                    origin_lat, origin_lon = prev_v["latitude"], prev_v["longitude"]
                 
+                maps_url = f"https://www.google.com/maps/dir/?api=1&origin={origin_lat},{origin_lon}&destination={v['latitude']},{v['longitude']}"
                 st.caption(dist_str)
+                st.markdown(f"🗺️ [Get Directions]({maps_url})")
                 
                 if st.button(f"Remove", key=f"rm_{i}"):
                     st.session_state.itinerary.pop(i)
@@ -210,12 +241,17 @@ def render_planner_view():
                 st.write("Generate a beautiful, secure link for her to view and confirm the plan.")
                 allow_customization = st.checkbox("Allow her to customize the itinerary", value=True)
                 
+                if date_stage == "First Date" and len(st.session_state.itinerary) > 3:
+                     st.warning("✨ **Tip:** You've added quite a few stops! For a first date, keeping it to 1-3 activities helps take the pressure off and keeps things casual. But feel free to continue if you're just comparing options!")
+                
                 if st.button("Generate Link"):
                     token = db.save_date_plan(
                         planner_name=planner_name,
                         is_verified=st.session_state.is_verified,
                         itinerary=st.session_state.itinerary,
-                        allow_customization=allow_customization
+                        allow_customization=allow_customization,
+                        date_stage=date_stage,
+                        planned_date=str(planned_date)
                     )
                     
                     # Create the sharing links

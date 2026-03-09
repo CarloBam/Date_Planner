@@ -21,18 +21,26 @@ def init_db():
             created_at TIMESTAMP
         )
     ''')
+    
+    # Try adding new columns if they do not exist
+    try:
+        c.execute("ALTER TABLE date_plans ADD COLUMN date_stage TEXT DEFAULT 'First Date'")
+        c.execute("ALTER TABLE date_plans ADD COLUMN planned_date TEXT")
+    except sqlite3.OperationalError:
+        pass # Columns already exist
+        
     conn.commit()
     conn.close()
 
-def save_date_plan(planner_name, is_verified, itinerary, allow_customization):
+def save_date_plan(planner_name, is_verified, itinerary, allow_customization, date_stage="First Date", planned_date=""):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     token = str(uuid.uuid4())[:8] # Short clean token
     
     c.execute('''
-        INSERT INTO date_plans (token, planner_name, is_verified, itinerary_json, allow_customization, status, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    ''', (token, planner_name, is_verified, json.dumps(itinerary), allow_customization, 'pending', datetime.now()))
+        INSERT INTO date_plans (token, planner_name, is_verified, itinerary_json, allow_customization, status, created_at, date_stage, planned_date)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (token, planner_name, is_verified, json.dumps(itinerary), allow_customization, 'pending', datetime.now(), date_stage, planned_date))
     
     conn.commit()
     conn.close()
@@ -41,7 +49,7 @@ def save_date_plan(planner_name, is_verified, itinerary, allow_customization):
 def get_date_plan(token):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute('SELECT planner_name, is_verified, itinerary_json, allow_customization, status FROM date_plans WHERE token = ?', (token,))
+    c.execute('SELECT planner_name, is_verified, itinerary_json, allow_customization, status, date_stage, planned_date FROM date_plans WHERE token = ?', (token,))
     row = c.fetchone()
     conn.close()
     
@@ -51,7 +59,9 @@ def get_date_plan(token):
             "is_verified": bool(row[1]),
             "itinerary": json.loads(row[2]),
             "allow_customization": bool(row[3]),
-            "status": row[4]
+            "status": row[4],
+            "date_stage": row[5] if len(row) > 5 else "First Date",
+            "planned_date": row[6] if len(row) > 6 else ""
         }
     return None
 
