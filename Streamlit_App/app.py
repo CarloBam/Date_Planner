@@ -4,6 +4,26 @@ import datetime
 from engine import extract_tags, get_distance_km, calculate_fuel_and_uber, get_recommendations
 from data import VENUES, AREAS_COORDINATES
 import database as db
+import socket
+import os
+
+def get_local_ip():
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        # doesn't even have to be reachable
+        s.connect(('10.254.254.254', 1))
+        ip = s.getsockname()[0]
+    except Exception:
+        ip = '127.0.0.1'
+    finally:
+        s.close()
+    return ip
+
+def get_base_app_url():
+    render_url = os.getenv("RENDER_EXTERNAL_URL")
+    if render_url:
+        return render_url
+    return f"http://{get_local_ip()}:8501"
 
 st.set_page_config(page_title="DateCart Cape Town", page_icon="🧡", layout="wide")
 
@@ -21,6 +41,11 @@ def render_receiver_view(token):
         st.error("Oops! This date link seems invalid or has expired.")
         return
 
+    # Check if we have a locally stored status in case the DB is ephemeral
+    session_status = st.session_state.get(f"status_{token}")
+    if session_status:
+        plan["status"] = session_status
+
     st.title("💌 You've been invited on a Date!")
     
     col1, col2 = st.columns([2, 1])
@@ -30,8 +55,12 @@ def render_receiver_view(token):
             st.info(f"{plan['planner_name']} has planned a thoughtful day out for you both in Cape Town.")
         elif plan["status"] == "accepted":
             st.success("🎉 You've accepted this date! See you soon.")
+            wa_accept = urllib.parse.quote(f"Hey {plan['planner_name']}, I'd love to go on the date you planned! 🎉")
+            st.markdown(f"📱 [Click here to text them YES on WhatsApp!](https://wa.me/?text={wa_accept})")
         elif plan["status"] == "rejected":
             st.warning("You kindly passed on this date. Thanks for letting them know!")
+            wa_reject = urllib.parse.quote(f"Hey {plan['planner_name']}, thanks for planning this out, but maybe we can do something else next time.")
+            st.markdown(f"📱 [Click here to text them on WhatsApp!](https://wa.me/?text={wa_reject})")
             
         st.subheader("📋 The Itinerary")
         
@@ -70,7 +99,7 @@ def render_receiver_view(token):
             st.info("💡 **First Date Safety Tip:** We always recommend sharing your live location with a friend! (Also, it's always smart to carry some pepper spray just to be safe.)")
             
             # Reconstruct invite url for whatsapp sharing
-            base_url = "http://localhost:8501"
+            base_url = st.session_state.get('base_url', get_base_app_url())
             invite_url = f"{base_url}?invite={token}"
             wa_share = urllib.parse.quote(f"Hey! I'm going on a first date. I'll share my live location soon, but here is my itinerary: {invite_url}")
             st.markdown(f"📱 [Share Alert to WhatsApp Friend](https://wa.me/?text={wa_share})")
@@ -79,18 +108,27 @@ def render_receiver_view(token):
         if plan["status"] == "pending":
             st.markdown("### Your Decision")
             if st.button("💖 I'd love to! (Accept)"):
-                db.update_date_plan_status(token, "accepted")
+                try:
+                    db.update_date_plan_status(token, "accepted")
+                except Exception:
+                    pass
+                st.session_state[f"status_{token}"] = "accepted"
                 st.rerun()
                 
             if plan["allow_customization"]:
                 if st.button("✨ Can we customize it?"):
-                    # For simplicity, customization can just flag the DB, or we can build an advanced swap UI.
-                    # We will mark it as returned for customization.
                     st.info("Customization requested! The planner will be notified.")
-                    db.update_date_plan_status(token, "customized")
+                    try:
+                        db.update_date_plan_status(token, "customized")
+                    except Exception:
+                        pass
                     
             if st.button("Maybe next time (Reject)", type="secondary"):
-                db.update_date_plan_status(token, "rejected")
+                try:
+                    db.update_date_plan_status(token, "rejected")
+                except Exception:
+                    pass
+                st.session_state[f"status_{token}"] = "rejected"
                 st.rerun()
 
 def render_planner_view():
@@ -105,6 +143,10 @@ def render_planner_view():
             st.sidebar.success("✅ Confirmed! You are Verified.")
     else:
         st.sidebar.success("✅ Account Verified")
+
+    st.sidebar.subheader("🌐 Sharing Settings")
+    default_url = get_base_app_url()
+    st.session_state.base_url = st.sidebar.text_input("Your Public App URL (e.g Render/Network)", default_url, help="Change this if you use ngrok or host the app online.")
 
     planner_name = st.sidebar.text_input("Your Name", "Liam")
 
@@ -255,7 +297,7 @@ def render_planner_view():
                     )
                     
                     # Create the sharing links
-                    base_url = "http://localhost:8501" # Default Streamlit port
+                    base_url = st.session_state.get('base_url', get_base_app_url())
                     invite_url = f"{base_url}?invite={token}"
                     
                     message = f"Hey! I've planned something special for us... 🌷 Thought you might like this itinerary. Let me know what you think: {invite_url}"
