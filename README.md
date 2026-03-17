@@ -1,6 +1,6 @@
-# Cape Date — Antigravity Build Guide
+# Cape Date
 
-Step-by-step instructions to build the Cape Town Date Planner using Google Antigravity.
+Step-by-step instructions to build the Cape Town Date Planner.
 
 ---
 
