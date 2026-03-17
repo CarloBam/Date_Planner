@@ -173,7 +173,7 @@ def render_planner_view():
 
     st.sidebar.subheader("Logistics & Stage")
     date_stage = st.sidebar.selectbox("Date Stage", ["First Date", "Second Date", "Third Date", "Anniversary", "Birthday Date"])
-    planned_date = st.sidebar.date_input("Planned Date", datetime.date.today())
+    planned_date = st.sidebar.date_input("Planned Date", value=None, min_value=datetime.date.today())
     energy = st.sidebar.selectbox("Her Energy", ["Introverted", "Extroverted", "Balanced"])
     budget = st.sidebar.number_input("Total Budget (ZAR)", min_value=100, max_value=10000, value=800, step=100)
     st.session_state.budget = budget
@@ -182,10 +182,15 @@ def render_planner_view():
     max_radius = st.sidebar.slider("Travel Radius (km)", 5, 50, 15)
     has_car = st.sidebar.checkbox("We have a car", value=True)
 
-    st.sidebar.subheader("Weather Conditions")
-    colA, colB = st.sidebar.columns(2)
-    is_rainy = colA.checkbox("Rainy? 🌧️")
-    is_windy = colB.checkbox("Strong Wind? 🌬️")
+    if planned_date:
+        st.sidebar.subheader("Weather Conditions")
+        st.sidebar.caption("Based on the date you selected, how is the weather looking?")
+        colA, colB = st.sidebar.columns(2)
+        is_rainy = colA.checkbox("Rainy? 🌧️")
+        is_windy = colB.checkbox("Strong Wind? 🌬️")
+    else:
+        is_rainy = False
+        is_windy = False
 
     start_lat = AREAS_COORDINATES[start_area][0]
     start_lon = AREAS_COORDINATES[start_area][1]
@@ -197,7 +202,7 @@ def render_planner_view():
     profile = {
         "description": description,
         "date_stage": date_stage,
-        "planned_date_month": planned_date.month,
+        "planned_date_month": planned_date.month if planned_date else datetime.date.today().month,
         "energy": energy,
         "has_car": has_car,
         "start_lat": start_lat,
@@ -300,33 +305,36 @@ def render_planner_view():
                 if date_stage == "First Date" and len(st.session_state.itinerary) > 3:
                      st.warning("✨ **Tip:** You've added quite a few stops! For a first date, keeping it to 1-3 activities helps take the pressure off and keeps things casual. But feel free to continue if you're just comparing options!")
                 
-                if st.button("Generate Link"):
-                    token = db.save_date_plan(
-                        planner_name=planner_name,
-                        is_verified=st.session_state.is_verified,
-                        itinerary=st.session_state.itinerary,
-                        allow_customization=allow_customization,
-                        date_stage=date_stage,
-                        planned_date=str(planned_date),
-                        is_rainy=is_rainy,
-                        is_windy=is_windy
-                    )
-                    
-                    # Create the sharing links
-                    base_url = st.session_state.get('base_url', get_base_app_url())
-                    invite_url = f"{base_url}?invite={token}"
-                    
-                    message = f"Hey! I've planned something special for us... 🌷 Thought you might like this itinerary. Let me know what you think: {invite_url}"
-                    wa_encoded = urllib.parse.quote(message)
-                    email_encoded_sub = urllib.parse.quote("Our Date Plan!")
-                    email_encoded_body = urllib.parse.quote(message)
-
-                    st.success("Link safely generated!")
-                    st.code(invite_url, language="text")
-                    
-                    st.markdown(f"📱 [Send via WhatsApp](https://wa.me/?text={wa_encoded})")
-                    st.markdown(f"📧 [Send via Email](mailto:?subject={email_encoded_sub}&body={email_encoded_body})")
-                    st.caption("This link is entirely secure and hides your budget calculations from the receiver.")
+                if planned_date is None:
+                    st.warning("⚠️ **Please select a Planned Date in the sidebar** to unlock the invite link generator!")
+                else:
+                    if st.button("Generate Link"):
+                        token = db.save_date_plan(
+                            planner_name=planner_name,
+                            is_verified=st.session_state.is_verified,
+                            itinerary=st.session_state.itinerary,
+                            allow_customization=allow_customization,
+                            date_stage=date_stage,
+                            planned_date=str(planned_date),
+                            is_rainy=is_rainy,
+                            is_windy=is_windy
+                        )
+                        
+                        # Create the sharing links
+                        base_url = st.session_state.get('base_url', get_base_app_url())
+                        invite_url = f"{base_url}?invite={token}"
+                        
+                        message = f"Hello! 👋\n\n✨ {planner_name} is asking you on a date! ✨\n\nTo see what is planned, accept or decline the invitation please click this link:\n{invite_url}\n\nValid for 1 day, no sign in required. 🌷"
+                        wa_encoded = urllib.parse.quote(message)
+                        email_encoded_sub = urllib.parse.quote("Our Date Plan!")
+                        email_encoded_body = urllib.parse.quote(message)
+    
+                        st.success("Link safely generated!")
+                        st.code(invite_url, language="text")
+                        
+                        st.markdown(f"📱 [Send via WhatsApp](https://wa.me/?text={wa_encoded})")
+                        st.markdown(f"📧 [Send via Email](mailto:?subject={email_encoded_sub}&body={email_encoded_body})")
+                        st.caption("This link is entirely secure and hides your budget calculations from the receiver.")
             
             # HIDDEN DEV TOOL: Fast view as receiver
             st.write("")
