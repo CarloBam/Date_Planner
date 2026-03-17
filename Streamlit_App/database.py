@@ -34,7 +34,7 @@ def init_db():
     conn.commit()
     conn.close()
 
-def save_date_plan(planner_name, is_verified, itinerary, allow_customization, date_stage="First Date", planned_date=""):
+def save_date_plan(planner_name, is_verified, itinerary, allow_customization, date_stage="First Date", planned_date="", is_rainy=False, is_windy=False):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     
@@ -46,7 +46,9 @@ def save_date_plan(planner_name, is_verified, itinerary, allow_customization, da
         "allow_customization": allow_customization,
         "status": "pending",
         "date_stage": date_stage,
-        "planned_date": planned_date
+        "planned_date": planned_date,
+        "is_rainy": is_rainy,
+        "is_windy": is_windy
     }
     
     json_str = json.dumps(payload)
@@ -63,7 +65,27 @@ def save_date_plan(planner_name, is_verified, itinerary, allow_customization, da
     return token
 
 def get_date_plan(token):
-    # Try SQLite First (in case status was updated and DB not wiped)
+    # Since the token is the absolute source of truth and contains extra data (like weather), decode it first!
+    try:
+        compressed = base64.urlsafe_b64decode(token.encode('utf-8'))
+        json_str = zlib.decompress(compressed).decode('utf-8')
+        plan = json.loads(json_str)
+        
+        # We should still check SQLite if the status was updated (e.g. accepted/rejected)
+        conn = sqlite3.connect(DB_FILE)
+        c = conn.cursor()
+        c.execute('SELECT status FROM date_plans WHERE token = ?', (token,))
+        row = c.fetchone()
+        conn.close()
+        
+        if row:
+            plan["status"] = row[0]
+            
+        return plan
+    except Exception:
+        pass
+
+    # If decoding fails for any reason, try legacy SQLite
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     c.execute('SELECT planner_name, is_verified, itinerary_json, allow_customization, status, date_stage, planned_date FROM date_plans WHERE token = ?', (token,))
@@ -78,17 +100,10 @@ def get_date_plan(token):
             "allow_customization": bool(row[3]),
             "status": row[4],
             "date_stage": row[5] if len(row) > 5 else "First Date",
-            "planned_date": row[6] if len(row) > 6 else ""
+            "planned_date": row[6] if len(row) > 6 else "",
+            "is_rainy": False,
+            "is_windy": False
         }
-    
-    # If not found in SQLite (e.g., Render DB wiped), decode from token!
-    try:
-        compressed = base64.urlsafe_b64decode(token.encode('utf-8'))
-        json_str = zlib.decompress(compressed).decode('utf-8')
-        return json.loads(json_str)
-    except Exception:
-        pass
-        
     return None
 
 def update_date_plan_status(token, new_status, new_itinerary=None):
