@@ -55,8 +55,19 @@ def render_receiver_view(token):
             st.info(f"✨ **{plan['planner_name']}** has planned a beautiful day out for you both in Cape Town.")
         elif plan["status"] == "accepted":
             st.success("🎉 You've accepted this date! See you soon.")
+            
+            # Save to Calendar feature
+            date_str = plan.get('planned_date', '').replace("-", "")
+            if date_str:
+                cal_url = f"https://calendar.google.com/calendar/render?action=TEMPLATE&text=Date+with+{plan['planner_name']}&dates={date_str}T100000Z/{date_str}T220000Z&details=Excited+for+our+date!"
+                st.markdown(f"📅 **[Save this Date to your Google Calendar]({cal_url})**")
+            
+            st.write("Let him know you accepted!")
             wa_accept = urllib.parse.quote(f"Hey {plan['planner_name']}, I'd love to go on the date you planned! 🎉")
-            st.markdown(f"📱 [Click here to text them YES on WhatsApp!](https://wa.me/?text={wa_accept})")
+            email_accept = urllib.parse.quote(f"Hey {plan['planner_name']},\n\nI'd love to go on the date you planned! 🎉")
+            st.markdown(f"📱 [Click here to text him YES on WhatsApp](https://wa.me/?text={wa_accept})")
+            st.markdown(f"📧 [Or click here to Email him YES](mailto:?subject=Yes%20to%20the%20Date!&body={email_accept})")
+            
         elif plan["status"] == "rejected":
             st.warning("You passed on this date. Thanks for letting them know!")
             wa_reject = urllib.parse.quote(f"Hey {plan['planner_name']}, thanks for planning this out, but maybe we can do something else next time.")
@@ -298,6 +309,7 @@ def render_planner_view():
             if rem < 0:
                 st.error(f"⚠️ Over budget by R {abs(rem)}")
             
+            
             with st.expander("💌 Generate Secure Invite Link", expanded=True):
                 st.write("Generate a beautiful, secure link for her to view and confirm the plan.")
                 allow_customization = st.checkbox("Allow her to customize the itinerary", value=True)
@@ -332,9 +344,16 @@ def render_planner_view():
                         st.success("Link safely generated!")
                         st.code(invite_url, language="text")
                         
-                        st.markdown(f"📱 [Send via WhatsApp](https://wa.me/?text={wa_encoded})")
-                        st.markdown(f"📧 [Send via Email](mailto:?subject={email_encoded_sub}&body={email_encoded_body})")
-                        st.caption("This link is entirely secure and hides your budget calculations from the receiver.")
+                        st.markdown(f"📱 [Send Invite via WhatsApp](https://wa.me/?text={wa_encoded})")
+                        st.markdown(f"📧 [Send Invite via Email](mailto:?subject={email_encoded_sub}&body={email_encoded_body})")
+                        st.caption("This link is entirely secure and heavily filters the planner view. She will **NOT** see any budget, petrol, or uber calculations from her end.")
+                        
+                        st.divider()
+                        st.subheader("📅 Your Next Steps")
+                        date_str = str(planned_date).replace("-", "")
+                        cal_url = f"https://calendar.google.com/calendar/render?action=TEMPLATE&text=Prepared+Date+Plan&dates={date_str}T100000Z/{date_str}T220000Z&details=Awaiting+her+RSVP!"
+                        st.markdown(f"🗓️ **[Save this unconfirmed Date to your Google Calendar]({cal_url})**")
+                        st.info("Wait for her to accept! When she clicks 'I'd love to', she will be prompted to text you her confirmation and save it to her own calendar.")
             
             # HIDDEN DEV TOOL: Fast view as receiver
             st.write("")
