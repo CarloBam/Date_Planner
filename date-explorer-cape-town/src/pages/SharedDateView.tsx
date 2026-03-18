@@ -357,6 +357,32 @@ export default function SharedDateView() {
             </div>
           )}
 
+          {/* Safety & General Tips */}
+          {dateData.quiz_answers?.stage === "first-date" ? (
+            <div className="mb-6 rounded-xl border border-secondary/20 bg-secondary/5 p-4 text-sm">
+              <h3 className="font-display font-bold text-secondary mb-2 flex items-center gap-2">
+                <Shield className="h-4 w-4" /> Girl Code: First Date Safety
+              </h3>
+              <ul className="list-disc space-y-1.5 pl-4 text-muted-foreground marker:text-secondary">
+                <li>Remember to share your live location with your bestie so they know where you are.</li>
+                <li>Keep a mini pepper spray in your bag just in case (always better safe than sorry!).</li>
+                <li>Have your own transport plan ready if you want to head out early.</li>
+                <li>Stay safe, but most importantly, have the best time! ✨</li>
+              </ul>
+            </div>
+          ) : (
+            <div className="mb-6 rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm">
+              <h3 className="font-display font-bold text-primary mb-2 flex items-center gap-2">
+                <Heart className="h-4 w-4" /> Date Prep Tips
+              </h3>
+              <ul className="list-disc space-y-1.5 pl-4 text-muted-foreground marker:text-primary">
+                <li>Bring a light jacket or jersey, Cape Town weather loves to surprise us.</li>
+                <li>Take a few cute pictures to remember the day!</li>
+                <li>Stay present, soak in the vibe, and have an amazing time together! ✨</li>
+              </ul>
+            </div>
+          )}
+
           {/* Current Weather */}
           <div className="mb-6">
             <WeatherWidget />
